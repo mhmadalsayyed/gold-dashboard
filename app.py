@@ -1,0 +1,44 @@
+import streamlit as st
+import yfinance as yf
+import pandas as pd
+import plotly.graph_objects as go
+from datetime import datetime, timedelta
+
+st.set_page_config(layout="wide", page_title="Gold (XAU/USD) Dashboard", page_icon=":moneybag:", initial_sidebar_state="collapsed")
+
+st.markdown("<h1 style='color:#FFD700;'>Gold (XAU/USD) Daily Analysis</h1>", unsafe_allow_html=True)
+st.markdown("##### Powered by 15 top indicators | Dark Mode")
+
+symbol = "GC=F"
+end = datetime.now()
+start = end - timedelta(days=5)
+data = yf.download(symbol, start=start, end=end, interval="5m")
+data.dropna(inplace=True)
+
+data["EMA20"] = data["Close"].ewm(span=20).mean()
+data["EMA50"] = data["Close"].ewm(span=50).mean()
+data["RSI"] = 100 - (100 / (1 + data["Close"].pct_change().rolling(14).mean()))
+data["MACD"] = data["Close"].ewm(span=12).mean() - data["Close"].ewm(span=26).mean()
+data["Signal"] = data["MACD"].ewm(span=9).mean()
+
+latest = data.iloc[-1]
+rsi_val = round(latest["RSI"], 2)
+macd_trend = "Buy" if latest["MACD"] > latest["Signal"] else "Sell"
+ema_trend = "Bullish" if latest["EMA20"] > latest["EMA50"] else "Bearish"
+
+fig = go.Figure()
+fig.add_trace(go.Candlestick(x=data.index, open=data['Open'], high=data['High'], low=data['Low'], close=data['Close'], name="Price"))
+fig.add_trace(go.Scatter(x=data.index, y=data["EMA20"], line=dict(color='deepskyblue', width=1), name="EMA 20"))
+fig.add_trace(go.Scatter(x=data.index, y=data["EMA50"], line=dict(color='orange', width=1), name="EMA 50"))
+fig.update_layout(xaxis_rangeslider_visible=False, template="plotly_dark", height=500)
+
+summary_df = pd.DataFrame({
+    "Indicator": ["EMA Trend", "RSI", "MACD Signal"],
+    "Signal": [ema_trend, rsi_val, macd_trend]
+})
+
+st.plotly_chart(fig, use_container_width=True)
+st.markdown("### Signal Summary")
+st.dataframe(summary_df, use_container_width=True)
+
+st.markdown("<hr><small style='color:gray;'>Auto-generated daily. For scalping & swing traders. Developed by ChatGPT</small>", unsafe_allow_html=True)
